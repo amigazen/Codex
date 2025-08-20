@@ -1,0 +1,122 @@
+; Test script for Codex
+; $VER: Codex 47.1 (20/08/2025)
+; (c) 2025 amigazen project
+; All rights reserved.
+;
+; Redistribution and use in source and binary forms, with or without modification,
+; are permitted provided that the following conditions are met:
+;
+; 1. Redistributions of source code must retain the above copyright notice,
+;    this list of conditions and the following disclaimer.
+;
+; 2. Redistributions in binary form must reproduce the above copyright notice,
+;    this list of conditions and the following disclaimer in the documentation
+;    and/or other materials provided with the distribution.
+;
+; THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+; IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+; ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+; LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+; CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+; SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+; INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+; CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+; ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+; POSSIBILITY OF SUCH DAMAGE.
+
+; This script tests all the different validation modes and functionality
+;
+; NOTE: $CODEX: comments in test files will appear as warning messages
+; in the output, making it easier to verify expected behavior
+
+echo "=== Codex Test Suite ==="
+echo "Testing all validation modes and functionality"
+echo ""
+echo "Note: $CODEX: comments in test files will appear as COMMENTS in output"
+echo "Note: None of these test files are meant to be complete and compile-able"
+echo ""
+
+; Test 1: Basic usage and help
+echo "Test 1: Basic usage and help"
+echo "================================"
+/Codex
+echo ""
+
+; Test 2: C89 validation only
+echo "Test 2: C89 validation only"
+echo "================================"
+/Codex test_c89_violations.c C89
+echo ""
+
+; Test 3: SAS/C compatibility check
+echo "Test 3: SAS/C compatibility check"
+echo "=================================="
+echo "Checking VBCC-specific keywords for SAS/C compatibility..."
+/Codex test_vbcc_specific.c SASC
+echo ""
+
+; Test 4: VBCC compatibility check
+echo "Test 4: VBCC compatibility check"
+echo "================================="
+echo "Checking SAS/C-specific keywords for VBCC compatibility..."
+/Codex test_sasc_specific.c VBCC
+echo ""
+
+; Test 5: Amiga coding standards
+echo "Test 5: Amiga coding standards"
+echo "==============================="
+/Codex test_amiga_standards.c AMIGA
+echo ""
+
+; Test 6: Multiple validation modes
+echo "Test 6: Multiple validation modes"
+echo "=================================="
+echo "Checking C89 + SAS/C + NDK + MEMSAFE compatibility..."
+/Codex test_example.c C89 SASC NDK MEMSAFE
+echo ""
+
+; Test 7: NDK validation
+echo "Test 7: NDK validation"
+echo "======================="
+/Codex test_example.c NDK
+echo ""
+
+; Test 8: DICE mode
+echo "Test 8: DICE mode"
+echo "=================="
+/Codex test_example.c DICE
+echo ""
+
+; Test 9: MEMSAFE mode
+echo "Test 9: MEMSAFE mode"
+echo "===================="
+/Codex test_example.c MEMSAFE
+echo ""
+
+; Test 10: All validation modes combined
+echo "Test 10: All validation modes combined"
+echo "====================================="
+/Codex test_example.c C89 SASC VBCC NDK AMIGA DICE MEMSAFE
+echo ""
+
+; Test 11: Multiple file matching
+echo "Test 11: Multiple file matching"
+echo "==============================="
+/Codex test_example.c test_c89_violations.c C89
+echo ""
+
+echo "=== Test Suite Complete ==="
+echo "All tests completed. Check output above for expected behavior."
+echo ""
+echo "Expected Results Summary:"
+echo "- C89 mode should flag variable declaration violations"
+echo "- SAS/C mode should flag VBCC/DICE/GCC-specific keywords"
+echo "- VBCC mode should flag SAS/C/DICE/GCC-specific keywords"
+echo "- AMIGA mode should flag naming and style violations"
+echo "- NDK mode should flag compiler-specific keywords and suggest universal replacements"
+echo "- DICE mode should flag compiler-specific keywords (C89 + NDK)"
+echo "- MEMSAFE mode should flag memory-unsafe functions and suggest replacements"
+echo "- Multiple modes should combine their findings"
+echo "- $CODEX: comments should appear as warning messages for test validation"
+echo "- Demo file should show $CODEX: comments as warnings"

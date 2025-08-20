@@ -1,0 +1,62 @@
+# Makefile for Codex
+# C89 Compliant Build
+
+CC = gcc
+CFLAGS = -std=c89 -pedantic -Wall -Wextra -O2
+TARGET = codex
+SOURCE = codex.c
+
+# Default target
+all: $(TARGET)
+
+# Build the linter
+$(TARGET): $(SOURCE)
+	$(CC) $(CFLAGS) -o $(TARGET) $(SOURCE)
+
+# Clean build artifacts
+clean:
+	rm -f $(TARGET)
+
+# Install to system (optional)
+install: $(TARGET)
+	cp $(TARGET) /usr/local/bin/
+
+# Uninstall
+uninstall:
+	rm -f /usr/local/bin/$(TARGET)
+
+# Test codex on itself
+test: $(TARGET)
+	./$(TARGET) $(SOURCE)
+
+# Test on the example file to demonstrate all features
+test-example: $(TARGET)
+	./$(TARGET) test_example.c
+
+# Test on multiple files
+test-multi: $(TARGET)
+	./$(TARGET) *.c
+
+# Test with different configuration options
+test-config: $(TARGET)
+	@echo "Testing with default settings:"
+	./$(TARGET) test_example.c
+	@echo "\nTesting with macro caps disabled:"
+	./$(TARGET) --no-macro-caps test_example.c
+	@echo "\nTesting with stdlib lowercase disabled:"
+	./$(TARGET) --no-stdlib-lowercase test_example.c
+
+# Show help
+help:
+	@echo "Available targets:"
+	@echo "  all          - Build codex (default)"
+	@echo "  clean        - Remove build artifacts"
+	@echo "  install      - Install to /usr/local/bin"
+	@echo "  uninstall    - Remove from /usr/local/bin"
+	@echo "  test         - Test codex on itself"
+	@echo "  test-example - Test codex on test_example.c (demonstrates all features)"
+	@echo "  test-multi   - Test codex on all .c files"
+	@echo "  test-config  - Test codex with different configuration options"
+	@echo "  help         - Show this help message"
+
+.PHONY: all clean install uninstall test test-example test-multi test-config help

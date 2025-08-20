@@ -1,0 +1,72 @@
+# Codex - C89 Compliant Code Guardian
+# SMakefile for SAS/C compilation
+
+# --- Variables ---
+
+# Compiler and linker commands
+CC = sc
+LD = slink
+
+# Compiler and linker options
+SCOPTIONS = PARAMETERS=REGISTERS STACKCHECK COMMENTNEST \
+            STRUCTUREEQUIVALENCE OPTIMIZE NOICONS MAP NOVERSION UTILITYLIBRARY \
+            INCLUDEDIR=include:
+
+# Linker flags for slink
+LDFLAGS = STRIPDEBUG NODEBUG NOICONS LIB sc:lib/sc.lib lib:small.lib BATCH
+
+# Source, Object, and Target executable names
+SOURCES = codex.c
+OBJECTS = codex.o
+TARGET = Codex
+
+# --- Targets ---
+
+# Default target: build the executable
+all: $(TARGET)
+
+# Rule to link the executable from the object file
+# Corrected to include the standard C library object file first.
+$(TARGET): $(OBJECTS)
+    $(LD) FROM sc:lib/c.o $(OBJECTS) TO $(TARGET) $(LDFLAGS)
+
+# --- Compilation Rules ---
+
+# Inference rule for compiling .c to .o files.
+# This version uses the $* automatic variable (the file's "stem"),
+# which is consistent with the working example you provided.
+.c.o:
+    $(CC) $(SCOPTIONS) $*.c OBJNAME=$*.o
+
+# --- Maintenance Targets ---
+
+# Clean up build artifacts
+clean:
+    -delete $(OBJECTS) $(TARGET) $(TARGET).map QUIET
+
+# Install the executable
+install: $(TARGET)
+    copy $(TARGET) /SDK/C/ QUIET
+
+# Display help information
+help:
+    echo "Codex Build System"
+    echo "=================="
+    echo ""
+    echo "Targets:"
+    echo "  all      - Build the Codex executable"
+    echo "  clean    - Remove build artifacts"
+    echo "  install  - Install to SDK:C/ directory"
+    echo "  help     - Show this help message"
+    echo ""
+    echo "Usage:"
+    echo "  smake all      - Build Codex"
+    echo "  smake clean    - Clean build files"
+    echo "  smake install  - Install to system"
+
+# --- Dependencies ---
+# Add header file dependencies here. smake will use these to determine
+# if an object file needs to be recompiled.
+codex.o: codex.c
+# Example with a header: codex.o: codex.c include/codex.h
+

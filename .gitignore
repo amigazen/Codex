@@ -1,0 +1,5 @@
+*.o
+*_debug*
+output.txt
+
+Source/Codex    
