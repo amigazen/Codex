@@ -56,7 +56,7 @@ help:
     echo "Targets:"
     echo "  all      - Build the Codex executable"
     echo "  clean    - Remove build artifacts"
-    echo "  install  - Install to SDK:C/ directory"
+    echo "  install  - Install to /SDK/C/ directory"
     echo "  help     - Show this help message"
     echo ""
     echo "Usage:"

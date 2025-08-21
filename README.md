@@ -106,6 +106,12 @@ smake install ;Will copy Codex to the SDK/C drawer in the project directory
 
 ## ChangeLog
 
+### Version 47.3 (21.08.2025)
+
+- Fixed: Replaced placeholder stdlib functions with SAS/C sc.lib built-ins
+- Fixed: Refactored code as a result of the advice received from... Codex
+- Fixed: Replaced magic numbers with named constants
+
 ### Version 47.2 (20.08.2025)
 - Fixed: C89 rules were still checked in C99 mode
 

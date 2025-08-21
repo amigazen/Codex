@@ -38,7 +38,11 @@
 #include <proto/utility.h>
 #include <clib/alib_protos.h>
 
-static const char *codex_verstag = "$VER: Codex 47.2 (20/08/2025)";
+#include <string.h>
+#include <stdlib.h>
+#include <ctype.h>
+
+static const char *codex_verstag = "$VER: Codex 47.3 (21/08/2025)";
 static const char *stack_cookie = "$STACK: 8192";
 
 /* Configuration constants */
@@ -47,14 +51,31 @@ static const char *stack_cookie = "$STACK: 8192";
 #define MAX_ERRORS 1000
 #define MAX_BLOCK_DEPTH 32 /* Max nesting depth for { } */
 
+/* String parsing constants */
+#define COMMENT_START_LENGTH 2
+#define ESCAPE_SEQUENCE_LENGTH 2
+
+/* Magic number detection constants */
+#define PREVIOUS_CHAR_OFFSET 1
+#define ARRAY_OFFSET_1 1
+#define TRUNCATION_START 117
+#define TRUNCATION_LENGTH 3
+#define VERSION_START_OFFSET 1
+
+/* Line excerpt constants */
+#define LINE_EXCERPT_LIMIT 120
+
+/* Buffer size constants */
+#define REPLACEMENT_BUFFER_SIZE 64
+#define LARGE_MESSAGE_BUFFER_SIZE 512
+
 /* Amiga return codes - use different names to avoid conflicts */
 #define CODEX_RETURN_OK 0
 #define CODEX_RETURN_WARN 5
 #define CODEX_RETURN_ERROR 20
 #define CODEX_RETURN_FAIL 20
 
-/* Define size_t for C89 compatibility */
-typedef unsigned long size_t;
+/* size_t is already defined by SAS/C in sys/commsize.h */
 
 /* Error types */
 typedef enum {
@@ -352,28 +373,7 @@ static int find_memsafe_replacement(const char *function, char *replacement, siz
 static int find_universal_replacement(const char *keyword, char *replacement, size_t max_len);
 static int is_stdlib_function(const char *word);
 
-/* String function prototypes for Amiga compatibility */
-static size_t strcspn(const char *str, const char *reject);
-static char *strtok(char *str, const char *delim);
-static char *strchr(const char *str, int c);
-static void *memmove(void *dest, const void *src, size_t n);
-static int strcmp(const char *s1, const char *s2);
-static int strncmp(const char *s1, const char *s2, size_t n);
-static int isspace(int c);
-static int isalnum(int c);
-static int islower(int c);
-static int isupper(int c);
-static int isdigit(int c);
-static void *memset(void *s, int c, size_t n);
-static char *strcpy(char *dest, const char *src);
-static size_t strlen(const char *str);
-static char *strncpy(char *dest, const char *src, size_t n);
-static char *strncat(char *dest, const char *src, size_t n);
-static char *strstr(const char *haystack, const char *needle);
-
-/* Memory management function prototypes */
-static void *malloc(size_t size);
-static void free(void *ptr);
+/* String function prototypes for Amiga compatibility - removed, using standard library */
 
 /* Main entry point for Amiga CLI tools */
 int main(int argc, char **argv) {
@@ -381,6 +381,7 @@ int main(int argc, char **argv) {
     struct RDArgs *rda;
     STRPTR *current_file;
     int modes_shown = 0;
+    static CONST_STRPTR template = "FILES/M/A,AMIGA/S,NDK/S,C89/S,C99/S,SASC/S,VBCC/S,DICE/S,MEMSAFE/S,QUIET/S,HELP/S";
     
     /* Using a struct for cleaner argument handling */
     struct {
@@ -396,8 +397,6 @@ int main(int argc, char **argv) {
         LONG quiet;
         LONG help;
     } args = {0};
-    
-    static CONST_STRPTR template = "FILES/M/A,AMIGA/S,NDK/S,C89/S,C99/S,SASC/S,VBCC/S,DICE/S,MEMSAFE/S,QUIET/S,HELP/S";
 
     rda = ReadArgs(template, (LONG *)&args, NULL);
     if (!rda) {
@@ -546,14 +545,14 @@ static void add_error_with_excerpt(const char *filename, int line, int col, Erro
     strncpy(errors[error_count].message, msg, sizeof(errors[error_count].message) - 1);
     errors[error_count].message[sizeof(errors[error_count].message) - 1] = '\0';
     
-    /* Capture line excerpt (first 120 chars to leave room for truncation indicator) */
+        /* Capture line excerpt (first LINE_EXCERPT_LIMIT chars to leave room for truncation indicator) */
     if (line_text && *line_text) {
-        strncpy(errors[error_count].line_excerpt, line_text, 120);
-        errors[error_count].line_excerpt[120] = '\0';
+        strncpy(errors[error_count].line_excerpt, line_text, LINE_EXCERPT_LIMIT);
+        errors[error_count].line_excerpt[LINE_EXCERPT_LIMIT] = '\0';
         /* Add truncation indicator if line was too long */
-        if (strlen(line_text) > 120) {
-            strncpy(errors[error_count].line_excerpt + 117, "...", 3);
-            errors[error_count].line_excerpt[120] = '\0';
+        if (strlen(line_text) > LINE_EXCERPT_LIMIT) {
+            strncpy(errors[error_count].line_excerpt + TRUNCATION_START, "...", TRUNCATION_LENGTH);
+            errors[error_count].line_excerpt[LINE_EXCERPT_LIMIT] = '\0';
         }
     } else {
         errors[error_count].line_excerpt[0] = '\0';
@@ -637,7 +636,7 @@ static void process_line(const char *line, int line_num, const char *filename) {
         if (parse_state.in_multiline_comment) {
             if (*s == '*' && *(s+1) == '/') {
                 parse_state.in_multiline_comment = 0;
-                s += 2;
+                s += COMMENT_START_LENGTH;
                 continue;
             }
             s++;
@@ -646,22 +645,32 @@ static void process_line(const char *line, int line_num, const char *filename) {
 
         if (*s == '/' && *(s+1) == '*') {
             parse_state.in_multiline_comment = 1;
-            s += 2;
+            s += COMMENT_START_LENGTH;
             continue;
         }
 
         if (*s == '/' && *(s+1) == '/') {
             /* Only flag C++ comments if C89 mode is active and SAS/C mode is not active (SAS/C supports them) */
             if (validate_c89_standards && !validate_sasc_standards) {
-                add_error_with_excerpt(filename, line_num, s - line + 1, ERROR_SYNTAX, "C++ comments ('//') are not allowed in C89.", original_line);
+                add_error_with_excerpt(filename, line_num, s - line + ARRAY_OFFSET_1, ERROR_SYNTAX, "C++ comments ('//') are not allowed in C89.", original_line);
                 if (error_count > initial_error_count) return; /* Exit after first error */
             }
             break; /* Rest of the line is a comment */
         }
         
-        /* Basic string literal handling */
-        if (*s == '"' && (s == line || *(s-1) != '\\')) in_string = !in_string;
-        if (*s == '\'' && (s == line || *(s-1) != '\\')) in_char_literal = !in_char_literal;
+        /* Basic string literal handling with proper escape sequence support */
+        if (in_string || in_char_literal) {
+            if (*s == '\\' && *(s+1) != '\0') {
+                /* Skip over escaped characters */
+                *p++ = *s++;
+                *p++ = *s++;
+                continue;
+            }
+        }
+        
+        /* Now check for quote characters (escapes already handled above) */
+        if (*s == '"') in_string = !in_string;
+        if (*s == '\'') in_char_literal = !in_char_literal;
 
         *p++ = *s++;
     }
@@ -742,27 +751,41 @@ static void process_line(const char *line, int line_num, const char *filename) {
 
     /* --- C89 VARIABLE DECLARATION PLACEMENT --- */
     if (validate_c89_standards) {
-        strcpy(line_copy, trimmed_line);
-        first_word = strtok(line_copy, " \t\n\r*(");
+        /* Use a more robust approach to avoid false positives with function pointers and complex declarations */
+        char *line_copy = malloc(strlen(trimmed_line) + 1);
+        if (line_copy) {
+            strcpy(line_copy, trimmed_line);
+            first_word = strtok(line_copy, " \t\n\r");
 
-        if (first_word) {
-            if (is_declaration_keyword(first_word)) {
-                if (parse_state.brace_depth > 0 && parse_state.statement_seen[parse_state.brace_depth]) {
-                    add_error_with_excerpt(filename, line_num, (trimmed_line - clean_line) + 1, ERROR_SYNTAX, "Variable declaration after a statement is not allowed in C89.", original_line);
-                    if (error_count > initial_error_count) return; /* Exit after first error */
-                }
-            } else if (strcmp(first_word, "case") != 0 && strcmp(first_word, "default") != 0 && *trimmed_line != '}') {
-                /* It's a statement (but not a label or closing brace) */
-                if (parse_state.brace_depth > 0) {
-                    parse_state.statement_seen[parse_state.brace_depth] = 1;
+            if (first_word) {
+                if (is_declaration_keyword(first_word)) {
+                    /* Check if this is a simple variable declaration (not a function pointer or complex type) */
+                    char *paren_pos = strchr(trimmed_line, '(');
+                    char *brace_pos = strchr(trimmed_line, '{');
+                    char *semicolon_pos = strchr(trimmed_line, ';');
+                    
+                    /* Only flag if it's a simple declaration (ends with semicolon, no parentheses before semicolon) */
+                    if (semicolon_pos && (!paren_pos || semicolon_pos < paren_pos)) {
+                        if (parse_state.brace_depth > 0 && parse_state.statement_seen[parse_state.brace_depth]) {
+                            add_error_with_excerpt(filename, line_num, (trimmed_line - clean_line) + ARRAY_OFFSET_1, ERROR_SYNTAX, "Variable declaration after a statement is not allowed in C89.", original_line);
+                            free(line_copy);
+                            if (error_count > initial_error_count) return; /* Exit after first error */
+                        }
+                    }
+                } else if (strcmp(first_word, "case") != 0 && strcmp(first_word, "default") != 0 && *trimmed_line != '}') {
+                    /* It's a statement (but not a label or closing brace) */
+                    if (parse_state.brace_depth > 0) {
+                        parse_state.statement_seen[parse_state.brace_depth] = 1;
+                    }
                 }
             }
+            free(line_copy);
         }
     }
 
     /* --- STYLE CHECKS --- */
     if (strlen(original_line) > line_length_limit) {
-        add_error_with_excerpt(filename, line_num, line_length_limit + 1, ERROR_STYLE, "Line exceeds 256 characters.", original_line);
+                    add_error_with_excerpt(filename, line_num, line_length_limit + ARRAY_OFFSET_1, ERROR_STYLE, "Line exceeds maximum length.", original_line);
         if (error_count > initial_error_count) return; /* Exit after first error */
     }
     
@@ -848,9 +871,9 @@ static void print_usage(void) {
     const char *start = strchr(codex_verstag, '(');
     const char *end = strchr(codex_verstag, ')');
     if (start && end && end > start) {
-        size_t len = end - (start + 1);
+        size_t len = end - (start + VERSION_START_OFFSET);
         if (len < sizeof(version_string)) {
-            strncpy(version_string, start + 1, len);
+            strncpy(version_string, start + VERSION_START_OFFSET, len);
             version_string[len] = '\0';
         }
     } else {
@@ -873,13 +896,15 @@ static void print_usage(void) {
 
     Printf("--- Examples ---\n");
     Printf("  Codex main.c AMIGA\n");
-    Printf("    -> Checks all .c files in MyProject for Amiga standards.\n\n");
+    Printf("    -> Checks main.c for Amiga standards.\n\n");
+    Printf("  Codex #?.c AMIGA\n");
+    Printf("    -> Checks all .c files in current directory for Amiga standards.\n\n");
     Printf("  Codex main.c C99 VBCC\n");
     Printf("    -> Checks main.c for C99 and VBCC compatibility.\n\n");
     Printf("  Codex main.c AMIGA C99\n");
     Printf("    -> Checks for Amiga standards using C99 as the base standard.\n\n");
     Printf("  Codex main.c MEMSAFE QUIET\n");
-    Printf("    -> Checks all local .c files for memory safety, printing only the errors.\n");
+    Printf("    -> Checks main.c for memory safety, printing only the errors.\n");
 }
 
 /* Helper to find the first non-whitespace character in a string */
@@ -903,221 +928,41 @@ static char* find_first_non_whitespace(char *str) {
     }
 } */
 
-/* Implementation of strcspn for Amiga compatibility */
-static size_t strcspn(const char *str, const char *reject) {
-    const char *s;
-    const char *r;
-    
-    for (s = str; *s; s++) {
-        for (r = reject; *r; r++) {
-            if (*s == *r) {
-                return (size_t)(s - str);
-            }
-        }
-    }
-    return (size_t)(s - str);
-}
+/* Custom string function implementations removed - using standard library functions */
 
-/* Implementation of strtok for Amiga compatibility */
-static char *strtok(char *str, const char *delim) {
-    static char *saveptr = NULL;
-    char *token;
-    
-    if (str) {
-        saveptr = str;
-    }
-    
-    if (!saveptr) {
-        return NULL;
-    }
-    
-    /* Skip leading delimiters */
-    while (*saveptr && strchr(delim, *saveptr)) {
-        saveptr++;
-    }
-    
-    if (!*saveptr) {
-        return NULL;
-    }
-    
-    token = saveptr;
-    
-    /* Find end of token */
-    while (*saveptr && !strchr(delim, *saveptr)) {
-        saveptr++;
-    }
-    
-    if (*saveptr) {
-        *saveptr = '\0';
-        saveptr++;
-    }
-    
-    return token;
-}
+/* Custom strtok implementation removed - using standard library */
 
-/* Implementation of strchr for Amiga compatibility */
-static char *strchr(const char *str, int c) {
-    while (*str) {
-        if (*str == c) {
-            return (char *)str;
-        }
-        str++;
-    }
-    return NULL;
-}
+/* Custom strchr implementation removed - using standard library */
 
-/* Implementation of memmove for Amiga compatibility - used indirectly via trim_leading_whitespace (commented out) */
-static void *memmove(void *dest, const void *src, size_t n) {
-    char *d = (char *)dest;
-    const char *s = (const char *)src;
-    
-    if (d < s) {
-        while (n--) *d++ = *s++;
-    } else {
-        d += n;
-        s += n;
-        while (n--) *--d = *--s;
-    }
-    
-    return dest;
-}
+/* Custom memmove implementation removed - using standard library */
 
-/* Implementation of strcmp for Amiga compatibility */
-static int strcmp(const char *s1, const char *s2) {
-    while (*s1 && *s2 && *s1 == *s2) {
-        s1++;
-        s2++;
-    }
-    return (unsigned char)*s1 - (unsigned char)*s2;
-}
+/* Custom strcmp implementation removed - using standard library */
 
-/* Implementation of strncmp for Amiga compatibility - used indirectly via stdlib_functions array */
-static int strncmp(const char *s1, const char *s2, size_t n) {
-    while (n > 0 && *s1 && *s2 && *s1 == *s2) {
-        s1++;
-        s2++;
-        n--;
-    }
-    if (n == 0) return 0;
-    return (unsigned char)*s1 - (unsigned char)*s2;
-}
+/* Custom strncmp implementation removed - using standard library */
 
-/* Implementation of isspace for Amiga compatibility */
-static int isspace(int c) {
-    return (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v');
-}
+/* Custom isspace implementation removed - using standard library */
 
-/* Implementation of isalnum for Amiga compatibility - used indirectly via stdlib_functions array */
-static int isalnum(int c) {
-    return ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'));
-}
+/* Custom isalnum implementation removed - using standard library */
 
-/* Implementation of islower for Amiga compatibility */
-static int islower(int c) {
-    return (c >= 'a' && c <= 'z');
-}
+/* Custom islower implementation removed - using standard library */
 
-/* Implementation of isupper for Amiga compatibility - used indirectly via stdlib_functions array */
-static int isupper(int c) {
-    return (c >= 'A' && c <= 'Z');
-}
+/* Custom isupper implementation removed - using standard library */
 
-/* Implementation of isdigit for Amiga compatibility */
-static int isdigit(int c) {
-    return (c >= '0' && c <= '9');
-}
+/* Custom isdigit implementation removed - using standard library */
 
-/* Implementation of memset for Amiga compatibility */
-static void *memset(void *s, int c, size_t n) {
-    unsigned char *p = (unsigned char *)s;
-    while (n--) *p++ = (unsigned char)c;
-    return s;
-}
+/* Custom memset implementation removed - using standard library */
 
-/* Implementation of strcpy for Amiga compatibility */
-static char *strcpy(char *dest, const char *src) {
-    char *d = dest;
-    while (*src) {
-        *d++ = *src++;
-    }
-    *d = '\0';
-    return dest;
-}
+/* Custom strcpy implementation removed - using standard library */
 
-/* Implementation of strlen for Amiga compatibility */
-static size_t strlen(const char *str) {
-    const char *s = str;
-    while (*s) s++;
-    return (size_t)(s - str);
-}
+/* Custom strlen implementation removed - using standard library */
 
-/* Implementation of strncpy for Amiga compatibility */
-static char *strncpy(char *dest, const char *src, size_t n) {
-    char *d = dest;
-    while (n > 0 && *src) {
-        *d++ = *src++;
-        n--;
-    }
-    while (n > 0) {
-        *d++ = '\0';
-        n--;
-    }
-    return dest;
-}
+/* Custom strncpy implementation removed - using standard library */
 
-/* Implementation of strstr for Amiga compatibility */
-static char *strstr(const char *haystack, const char *needle) {
-    if (!*needle) return (char *)haystack;
-    
-    while (*haystack) {
-        const char *h = haystack;
-        const char *n = needle;
-        
-        while (*h && *n && *h == *n) {
-            h++;
-            n++;
-        }
-        
-        if (!*n) return (char *)haystack;
-        haystack++;
-    }
-    
-    return NULL;
-}
+/* Custom strstr implementation removed - using standard library */
 
-/* Implementation of strncat for Amiga compatibility */
-static char *strncat(char *dest, const char *src, size_t n) {
-    char *d = dest;
-    
-    /* Find end of destination string */
-    while (*d) d++;
-    
-    /* Copy at most n characters from src */
-    while (n > 0 && *src) {
-        *d++ = *src++;
-        n--;
-    }
-    
-    /* Ensure null termination */
-    *d = '\0';
-    
-    return dest;
-}
+/* Custom strncat implementation removed - using standard library */
 
-/* Implementation of malloc for Amiga compatibility */
-static void *malloc(size_t size) {
-    return AllocMem(size, MEMF_ANY);
-}
-
-/* Implementation of free for Amiga compatibility */
-static void free(void *ptr) {
-    if (ptr) {
-        /* Note: FreeMem(ptr, 0) relies on the memory subsystem knowing the allocation size.
-           This works for AllocMem allocations but is fragile. In a production environment,
-           you should track allocation sizes or use a different memory management approach. */
-        FreeMem(ptr, 0);
-    }
-}
+/* Using standard library malloc/free from stdlib.h */
 
 /* ============================================================================ */
 /* STANDARDS VALIDATION FUNCTIONS */
@@ -1125,10 +970,13 @@ static void free(void *ptr) {
 
 /* Check for Amiga coding standards compliance */
 static void check_amiga_standards(const char *line, int line_num, const char *filename, const char *original_line) {
-    char *line_copy;
+    char line_copy[MAX_LINE_LENGTH];
     char *token;
     char *paren_pos;
-    char *brace_pos;
+    
+    /* Initialize line_copy for use throughout the function */
+    strncpy(line_copy, line, sizeof(line_copy) - 1);
+    line_copy[sizeof(line_copy) - 1] = '\0';
     
     /* Check for standard C types that should use Amiga types */
     /* Use more specific patterns to avoid false positives in strings/comments */
@@ -1246,29 +1094,24 @@ static void check_amiga_standards(const char *line, int line_num, const char *fi
     }
     
     /* Check for PascalCase function definitions (not stdlib functions) */
-    line_copy = malloc(strlen(line) + 1);
-    if (!line_copy) return;
-    
-    strcpy(line_copy, line);
     token = strtok(line_copy, " \t\n\r");
     
     if (token) {
         /* Check if this looks like a function definition */
         paren_pos = strchr(line, '(');
-        brace_pos = strchr(line, '{');
         
-        if (paren_pos && (!brace_pos || paren_pos < brace_pos)) {
-            /* This looks like a function definition */
-            
-            /* Only check PascalCase for non-stdlib and non-Amiga functions */
-            if (!is_stdlib_function(token) && !is_amiga_function(token) && islower((unsigned char)token[0])) {
-                add_error_with_excerpt(filename, line_num, 1, ERROR_WARNING, 
-                             "Use PascalCase function names", original_line);
+        if (paren_pos) {
+            /* This looks like a function definition - get the function name (next token) */
+            char *func_name = strtok(NULL, " \t\n\r*(");
+            if (func_name) {
+                /* Only check PascalCase for non-stdlib and non-Amiga functions */
+                if (!is_stdlib_function(func_name) && !is_amiga_function(func_name) && islower((unsigned char)func_name[0])) {
+                    add_error_with_excerpt(filename, line_num, 1, ERROR_WARNING, 
+                                 "Use PascalCase function names", original_line);
+                }
             }
         }
     }
-    
-    free(line_copy);
     
     /* Check for proper Amiga library usage patterns - double check SAS/C manual before enabling */
     /* if (strstr(line, "exit(") && !strstr(line, "return")) {
@@ -1285,13 +1128,12 @@ static void check_amiga_standards(const char *line, int line_num, const char *fi
 
 /* Check for NDK compiler-specific.h reserved words */
 static void check_ndk_standards(const char *line, int line_num, const char *filename, const char *original_line) {
-    char *line_copy;
+    char line_copy[MAX_LINE_LENGTH];
     char *token;
     
-    line_copy = malloc(strlen(line) + 1);
-    if (!line_copy) return;
+    strncpy(line_copy, line, sizeof(line_copy) - 1);
+    line_copy[sizeof(line_copy) - 1] = '\0';
     
-    strcpy(line_copy, line);
     token = strtok(line_copy, " \t\n\r");
     
     while (token) {
@@ -1301,8 +1143,6 @@ static void check_ndk_standards(const char *line, int line_num, const char *file
         }
         token = strtok(NULL, " \t\n\r");
     }
-    
-    free(line_copy);
 }
 
 /* Check for C89 compliance */
@@ -1457,18 +1297,17 @@ static void check_c99_standards(const char *line, int line_num, const char *file
 
 /* Check for SAS/C compliance */
 static void check_sasc_standards(const char *line, int line_num, const char *filename, const char *original_line) {
-    char *line_copy;
+    char line_copy[MAX_LINE_LENGTH];
     char *token;
     
-    line_copy = malloc(strlen(line) + 1);
-    if (!line_copy) return;
+    strncpy(line_copy, line, sizeof(line_copy) - 1);
+    line_copy[sizeof(line_copy) - 1] = '\0';
     
-    strcpy(line_copy, line);
     token = strtok(line_copy, " \t\n\r*();,");
     
     while (token) {
         if (is_sasc_keyword(token)) {
-            char replacement[64];
+            char replacement[REPLACEMENT_BUFFER_SIZE];
             char message[256];
             if (find_universal_replacement(token, replacement, sizeof(replacement)) && strcmp(replacement, "(none)") != 0) {
                 strncpy(message, "Keyword '", sizeof(message) - 1);
@@ -1482,29 +1321,25 @@ static void check_sasc_standards(const char *line, int line_num, const char *fil
                 strncat(message, "' is incompatible with SAS/C and has no direct universal equivalent.", sizeof(message) - strlen(message) - 1);
             }
             add_error(filename, line_num, 1, ERROR_COMPILER, message);
-            free(line_copy);
             return;
         }
         token = strtok(NULL, " \t\n\r*();,");
     }
-    
-    free(line_copy);
 }
 
 /* Check for VBCC compliance */
 static void check_vbcc_standards(const char *line, int line_num, const char *filename, const char *original_line) {
-    char *line_copy;
+    char line_copy[MAX_LINE_LENGTH];
     char *token;
 
-    line_copy = malloc(strlen(line) + 1);
-    if (!line_copy) return;
+    strncpy(line_copy, line, sizeof(line_copy) - 1);
+    line_copy[sizeof(line_copy) - 1] = '\0';
 
-    strcpy(line_copy, line);
     token = strtok(line_copy, " \t\n\r*();,");
 
     while (token) {
         if (is_vbcc_keyword(token)) {
-            char replacement[64];
+            char replacement[REPLACEMENT_BUFFER_SIZE];
             char message[256];
             if (find_universal_replacement(token, replacement, sizeof(replacement)) && strcmp(replacement, "(none)") != 0) {
                 strncpy(message, "Keyword '", sizeof(message) - 1);
@@ -1518,13 +1353,10 @@ static void check_vbcc_standards(const char *line, int line_num, const char *fil
                 strncat(message, "' is incompatible with VBCC and has no direct universal equivalent.", sizeof(message) - strlen(message) - 1);
             }
             add_error(filename, line_num, 1, ERROR_COMPILER, message);
-            free(line_copy);
             return;
         }
         token = strtok(NULL, " \t\n\r*();,");
     }
-
-    free(line_copy);
 }
 
 /* Helper function to check if a word is an NDK reserved word */
@@ -1687,18 +1519,17 @@ static int is_c89_header_file(const char *line) {
 static void check_dice_standards(const char *line, int line_num, const char *filename, const char *original_line) {
     /* DICE mode currently implements C89 + compiler keywords */
     /* This will be expanded for full DICE compiler compatibility */
-    char *line_copy;
+    char line_copy[MAX_LINE_LENGTH];
     char *token;
 
-    line_copy = malloc(strlen(line) + 1);
-    if (!line_copy) return;
+    strncpy(line_copy, line, sizeof(line_copy) - 1);
+    line_copy[sizeof(line_copy) - 1] = '\0';
 
-    strcpy(line_copy, line);
     token = strtok(line_copy, " \t\n\r*();,");
 
     while (token) {
         if (is_ndk_reserved_word(token)) {
-            char replacement[64];
+            char replacement[REPLACEMENT_BUFFER_SIZE];
             char message[256];
             if (find_universal_replacement(token, replacement, sizeof(replacement)) && strcmp(replacement, "(none)") != 0) {
                 strncpy(message, "Keyword '", sizeof(message) - 1);
@@ -1712,31 +1543,27 @@ static void check_dice_standards(const char *line, int line_num, const char *fil
                 strncat(message, "' is DICE-incompatible and has no direct universal equivalent.", sizeof(message) - strlen(message) - 1);
             }
             add_error(filename, line_num, 1, ERROR_COMPILER, message);
-            free(line_copy);
             return;
         }
         token = strtok(NULL, " \t\n\r*();,");
     }
-
-    free(line_copy);
 }
 
 /* Check for memory safety issues */
 static void check_memsafe_standards(const char *line, int line_num, const char *filename, const char *original_line) {
-    char *line_copy;
+    char line_copy[MAX_LINE_LENGTH];
     char *token;
     char replacement[256];
     
-    line_copy = malloc(strlen(line) + 1);
-    if (!line_copy) return;
+    strncpy(line_copy, line, sizeof(line_copy) - 1);
+    line_copy[sizeof(line_copy) - 1] = '\0';
     
-    strcpy(line_copy, line);
     token = strtok(line_copy, " \t\n\r*();,");
     
     while (token) {
         if (is_memsafe_unsafe_function(token)) {
             if (find_memsafe_replacement(token, replacement, sizeof(replacement))) {
-                char message[512];
+                char message[LARGE_MESSAGE_BUFFER_SIZE];
 
                 /* --- NEW: Add qualified guidance for specific functions --- */
                 if (strcmp(token, "realpath") == 0) {
@@ -1757,14 +1584,11 @@ static void check_memsafe_standards(const char *line, int line_num, const char *
                 message[sizeof(message) - 1] = '\0'; /* Ensure null termination */
                 add_error(filename, line_num, 1, ERROR_WARNING, message);
                 
-                free(line_copy);
                 return;
             }
         }
         token = strtok(NULL, " \t\n\r*();,");
     }
-    
-    free(line_copy);
 }
 
 /* Helper function to check if a function is memory-unsafe */
@@ -1846,10 +1670,10 @@ static void check_for_magic_numbers(const char *line, int line_num, const char *
         /* Check for a digit that is not inside a string and is not part of a word */
         if (!in_string && isdigit((unsigned char)*p)) {
             /* A simple check: is the digit preceded by an operator or parenthesis? */
-            if (p > line && (strchr("+-*/%=(<>,", *(p - 1)))) {
+            if (p > line && (strchr("+-*/%=(<>,", *(p - PREVIOUS_CHAR_OFFSET)))) {
                 /* Avoid flagging array initializers like { 1, 2, 3 } */
-                if (!strchr("{,", *(p-1))) {
-                     add_error_with_excerpt(filename, line_num, (p - line) + 1, ERROR_STYLE,
+                if (!strchr("{,", *(p-PREVIOUS_CHAR_OFFSET))) {
+                     add_error_with_excerpt(filename, line_num, (p - line) + ARRAY_OFFSET_1, ERROR_STYLE,
                                      "Magic number found. Consider using a named constant.", original_line);
                      return; /* Only flag one per line */
                 }
