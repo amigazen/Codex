@@ -42,11 +42,11 @@
      char buffer[256];
      char *src = "Hello World";
  
-     /* $CODEX: Memory-unsafe function 'strcpy' found - use 'strncpy' instead. */
+     /* $CODEX: The next line should trigger a strcpy warning */
      strcpy(buffer, src);
-     /* $CODEX: Memory-unsafe function 'strcat' found - use 'strncat' instead. */
+     /* $CODEX: The next line should trigger a strcat warning */
      strcat(buffer, " more text");
-     /* $CODEX: Memory-unsafe function 'sprintf' found - use 'snprintf' instead. */
+     /* $CODEX: The next line should trigger a sprintf warning */
      sprintf(buffer, "%s", src);
  }
  
@@ -56,11 +56,11 @@
      char *filename;
      char *path;
  
-     /* $CODEX: Memory-unsafe function 'tmpnam' found - use 'tmpnam_r' instead. */
+     /* $CODEX: The next line should trigger a tmpnam warning */
      filename = tmpnam(NULL);
-     /* $CODEX: Memory-unsafe function 'realpath' found - use 'realpath' with a pre-allocated buffer instead. */
+     /* $CODEX: The next line should trigger a realpath warning */
      path = realpath("/tmp", NULL);
-     /* $CODEX: Memory-unsafe function 'gets' found - use 'fgets' instead. */
+     /* $CODEX: The next line should trigger a gets warning */
      gets(buffer);
  }
  
@@ -69,16 +69,16 @@
      char str[] = "hello,world,test";
      char *token;
  
-     /* $CODEX: Memory-unsafe function 'strtok' found - use 'strtok_r' instead. */
+     /* $CODEX: The next line should trigger a strtok warning */
      token = strtok(str, ",");
  }
  
  void memsafe_violation4(void)
  {
      int num;
-     /* $CODEX: Memory-unsafe function 'scanf' found - use 'check_return_and_width' instead. */
+     /* $CODEX: The next line should trigger a scanf warning */
      scanf("%d", &num);
-     /* $CODEX: Memory-unsafe function 'sscanf' found - use 'check_return_and_width' instead. */
+     /* $CODEX: The next line should trigger a sscanf warning */
      sscanf("12345", "%d", &num);
  }
  
@@ -94,9 +94,8 @@
      buffer[sizeof(buffer) - 1] = '\0';
  
      strncat(buffer, " more text", sizeof(buffer) - strlen(buffer) - 1);
-     /* The line below is commented out because snprintf is a C99 function
-        and would cause a C89 error, preventing memsafe checks from running. */
-     /* snprintf(buffer, sizeof(buffer), "%s", src); */
+
+     snprintf(buffer, sizeof(buffer), "%s", src);
  }
  
  void memsafe_compliant2(void)
@@ -115,8 +114,8 @@
      char *token;
      char *saveptr;
  
-     /* Safe string tokenization. Commented out because strtok_r is not C89. */
-     /* token = strtok_r(str, ",", &saveptr); */
+     /* $CODEX: The next line should NOT trigger a strtok warning */
+     token = strtok_r(str, ",", &saveptr); 
  }
  
  void memsafe_compliant4(void)
@@ -124,7 +123,7 @@
      int num;
      int result;
  
-     /* Safer scanf requires checking the return value and using width specifiers */
+     /* $CODEX: The next line should trigger a scanf warning */
      result = scanf("%10d", &num);
      if (result == 1) {
          /* Success */
