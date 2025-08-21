@@ -58,7 +58,7 @@ Unlike a compiler, Codex doesn't generate object code. Instead, it performs lexi
 Codex follows the standard Amiga command line format:
 
 @{CODE}
-Codex <file ...> [MODE/OPTION ...]
+Codex FILES/M/A,AMIGA/S,NDK/S,C89/S,C99/S,SASC/S,VBCC/S,DICE/S,MEMSAFE/S,QUIET/S,HELP/S
 @{PLAIN}
 
 @{B}File Specifications@{UB}
@@ -214,6 +214,6 @@ Codex uses fast lexical analysis, not full semantic parsing. It may occasionally
 * No preprocessor handling: It does not process macros or follow #includes.
 * No cross-file analysis: Each file is processed independently.
 
-These limitations are by design to ensure Codex remains fast and lightweight. For deeper analysis, a full compiler is required.
+These limitations are by design to ensure Codex remains fast and lightweight. For deeper analysis, a C compiler is required.
 
 @ENDNODE

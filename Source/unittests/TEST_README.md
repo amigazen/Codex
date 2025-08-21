@@ -1,6 +1,6 @@
 # Codex Test Suite
 
-This directory contains comprehensive test files and scripts to verify the functionality of the Codex Multi-Standard Code Guardian.
+This directory contains comprehensive test files and scripts to verify the functionality of the Codex style checker.
 
 ## Test Files
 

@@ -7,7 +7,7 @@
 
 ### Build Commands
 ```bash
-# Using SMakefile
+; Using SMakefile
 cd Source/
 smake Codex
 smake install ;Will copy Codex to the SDK/C drawer in the project directory

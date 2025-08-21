@@ -1,4 +1,6 @@
 *.o
+*.lnk
+*.map
 *_debug*
 output.txt
 
