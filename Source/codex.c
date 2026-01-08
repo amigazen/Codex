@@ -1,7 +1,8 @@
 /*
  * Codex - Amiga C Linter & Style Checker
  *
- * A lightweight code linter-cum-style checker for standard C code that checks for common programming issues and style violations on Amiga.
+ * A lightweight code linter-cum-style checker for standard C code that checks 
+ * for common programming issues and style violations on Amiga.
  *
  * Copyright (c) 2025 amigazen project
  * All rights reserved.
@@ -42,8 +43,9 @@
 #include <stdlib.h>
 #include <ctype.h>
 
-static const char *codex_verstag = "$VER: Codex 47.3 (21/08/2025)";
+static const char *codex_verstag = "$VER: Codex 47.3 (26/12/2025)";
 static const char *stack_cookie = "$STACK: 8192";
+LONG oslibversion  = 47L; 
 
 /* Configuration constants */
 #define MAX_LINE_LENGTH 1024
@@ -101,6 +103,11 @@ typedef struct {
     int in_multiline_comment;
     int brace_depth;
     UBYTE statement_seen[MAX_BLOCK_DEPTH]; /* Flag for each brace depth */
+    int forbid_active; /* Track if we're inside a Forbid() block */
+    int forbid_line; /* Line number where Forbid() was called */
+    int permit_line; /* Line number where Permit() was called */
+    int forbid_count; /* Count of Forbid() calls */
+    int permit_count; /* Count of Permit() calls */
 } ParseState;
 
 /* Global state */
@@ -355,6 +362,8 @@ static void check_vbcc_standards(const char *line, int line_num, const char *fil
 static void check_dice_standards(const char *line, int line_num, const char *filename, const char *original_line);
 static void check_memsafe_standards(const char *line, int line_num, const char *filename, const char *original_line);
 static void check_for_magic_numbers(const char *line, int line_num, const char *filename, const char *original_line);
+static void check_forbid_permit_pairs(const char *line, int line_num, const char *filename, const char *original_line);
+static void validate_forbid_permit_pairs(const char *filename);
 static int is_ndk_reserved_word(const char *word);
 static int is_c99_keyword(const char *word);
 static int is_c99_feature(const char *line);
@@ -749,6 +758,10 @@ static void process_line(const char *line, int line_num, const char *filename) {
     check_for_magic_numbers(clean_line, line_num, filename, original_line);
     if (error_count > initial_error_count) return; /* Exit after first error */
 
+    /* --- FORBID/PERMIT PAIR CHECK --- */
+    check_forbid_permit_pairs(clean_line, line_num, filename, original_line);
+    if (error_count > initial_error_count) return; /* Exit after first error */
+
     /* --- C89 VARIABLE DECLARATION PLACEMENT --- */
     if (validate_c89_standards) {
         /* Use a more robust approach to avoid false positives with function pointers and complex declarations */
@@ -841,6 +854,9 @@ static int process_file(const char *filename) {
     if (parse_state.in_multiline_comment) {
         add_error(filename, line_num, 1, ERROR_WARNING, "File ends with an unterminated '/*' comment.");
     }
+    
+    /* Validate Forbid()/Permit() pairs at end of file */
+    validate_forbid_permit_pairs(filename);
     
     return 0;
 }
@@ -1657,6 +1673,126 @@ static int find_universal_replacement(const char *keyword, char *replacement, si
         }
     }
     return 0;
+}
+
+/* Check for Forbid()/Permit() pairs on each line */
+static void check_forbid_permit_pairs(const char *line, int line_num, const char *filename, const char *original_line) {
+    const char *forbid_pos;
+    const char *permit_pos;
+    int line_distance;
+    
+    /* Check for Forbid() call - look for "Forbid(" or "Forbid (" */
+    forbid_pos = strstr(line, "Forbid(");
+    if (!forbid_pos) {
+        forbid_pos = strstr(line, "Forbid (");
+    }
+    
+    /* Check for Permit() call - look for "Permit(" or "Permit (" */
+    permit_pos = strstr(line, "Permit(");
+    if (!permit_pos) {
+        permit_pos = strstr(line, "Permit (");
+    }
+    
+    /* Handle case where both Forbid() and Permit() are on the same line */
+    if (forbid_pos && permit_pos) {
+        /* Check which comes first */
+        if (forbid_pos < permit_pos) {
+            /* Forbid() comes first - process in order */
+            parse_state.forbid_count++;
+            if (parse_state.forbid_active) {
+                /* Multiple Forbid() calls without Permit() in between */
+                add_error_with_excerpt(filename, line_num, (forbid_pos - line) + ARRAY_OFFSET_1, ERROR_WARNING,
+                                     "Forbid() called without matching Permit() from previous Forbid()", original_line);
+            } else {
+                parse_state.forbid_active = 1;
+                parse_state.forbid_line = line_num;
+                /* Warn that Forbid() is being used */
+                add_error_with_excerpt(filename, line_num, (forbid_pos - line) + ARRAY_OFFSET_1, ERROR_WARNING,
+                                     "Forbid() usage detected", original_line);
+            }
+            /* Now process Permit() */
+            parse_state.permit_count++;
+            if (parse_state.forbid_active) {
+                /* Check if too many lines between Forbid() and Permit() */
+                line_distance = line_num - parse_state.forbid_line;
+                if (line_distance > 5) {
+                    add_error_with_excerpt(filename, line_num, (permit_pos - line) + ARRAY_OFFSET_1, ERROR_WARNING,
+                                         "Too many lines (>5) between Forbid() and Permit()", original_line);
+                }
+                parse_state.permit_line = line_num;
+                parse_state.forbid_active = 0; /* Reset for next pair */
+            }
+        } else {
+            /* Permit() comes first - this is an error */
+            parse_state.permit_count++;
+            add_error_with_excerpt(filename, line_num, (permit_pos - line) + ARRAY_OFFSET_1, ERROR_WARNING,
+                                 "Permit() called without matching Forbid()", original_line);
+            /* Process Forbid() after */
+            parse_state.forbid_count++;
+            parse_state.forbid_active = 1;
+            parse_state.forbid_line = line_num;
+            add_error_with_excerpt(filename, line_num, (forbid_pos - line) + ARRAY_OFFSET_1, ERROR_WARNING,
+                                 "Forbid() usage detected", original_line);
+        }
+        return; /* Both processed, exit early */
+    }
+    
+    /* Warn if Forbid() is used */
+    if (forbid_pos) {
+        parse_state.forbid_count++;
+        if (parse_state.forbid_active) {
+            /* Multiple Forbid() calls without Permit() in between */
+            add_error_with_excerpt(filename, line_num, (forbid_pos - line) + ARRAY_OFFSET_1, ERROR_WARNING,
+                                 "Forbid() called without matching Permit() from previous Forbid()", original_line);
+        } else {
+            parse_state.forbid_active = 1;
+            parse_state.forbid_line = line_num;
+            /* Warn that Forbid() is being used */
+            add_error_with_excerpt(filename, line_num, (forbid_pos - line) + ARRAY_OFFSET_1, ERROR_WARNING,
+                                 "Forbid() usage detected", original_line);
+        }
+    }
+    
+    /* Warn if Permit() is used */
+    if (permit_pos) {
+        parse_state.permit_count++;
+        if (!parse_state.forbid_active) {
+            /* Permit() called without matching Forbid() */
+            add_error_with_excerpt(filename, line_num, (permit_pos - line) + ARRAY_OFFSET_1, ERROR_WARNING,
+                                 "Permit() called without matching Forbid()", original_line);
+        } else {
+            /* Check if too many lines between Forbid() and Permit() */
+            line_distance = line_num - parse_state.forbid_line;
+            if (line_distance > 5) {
+                add_error_with_excerpt(filename, line_num, (permit_pos - line) + ARRAY_OFFSET_1, ERROR_WARNING,
+                                     "Too many lines (>5) between Forbid() and Permit()", original_line);
+            }
+            parse_state.permit_line = line_num;
+            parse_state.forbid_active = 0; /* Reset for next pair */
+        }
+    }
+}
+
+/* Validate Forbid()/Permit() pairs at end of file */
+static void validate_forbid_permit_pairs(const char *filename) {
+    /* Warn if Forbid()/Permit() are used at all */
+    if (parse_state.forbid_count > 0 || parse_state.permit_count > 0) {
+        if (parse_state.forbid_count > 0 && parse_state.permit_count == 0) {
+            add_error(filename, parse_state.forbid_line, 1, ERROR_WARNING,
+                     "Forbid() used without matching Permit()");
+        } else if (parse_state.forbid_count == 0 && parse_state.permit_count > 0) {
+            /* This case is already handled in check_forbid_permit_pairs */
+        } else if (parse_state.forbid_count != parse_state.permit_count) {
+            add_error(filename, 1, 1, ERROR_WARNING,
+                     "Mismatched Forbid()/Permit() pairs: count mismatch");
+        }
+        
+        /* Warn if file ends with active Forbid() */
+        if (parse_state.forbid_active) {
+            add_error(filename, parse_state.forbid_line, 1, ERROR_WARNING,
+                     "File ends with active Forbid() without matching Permit()");
+        }
+    }
 }
 
 /* Check for magic numbers - hardcoded numerical constants that should be named constants */
