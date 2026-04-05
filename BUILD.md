@@ -15,4 +15,4 @@ smake install ;Will copy Codex to the SDK/C drawer in the project directory
 
 ## Installation
 
-1. Find the Codex executable and matching icon in SDK/C/ in this distribution
+1. Find the Codex executable in SDK/C/ in this distribution

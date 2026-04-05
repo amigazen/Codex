@@ -127,15 +127,15 @@ smake install ;Will copy Codex to the SDK/C drawer in the project directory
 
 *Minds awaken, free*
 
-**amigazen project** uses modern software development tools and methods to update and rerelease classic Amiga open source software. Our upcoming releases include a new AWeb, and a new Amiga Python 2.
+**amigazen project** uses modern software development tools and methods to update and rerelease classic Amiga open source software. Releases include a new AWeb, and a new Amiga Python 2.
 
-Key to our approach is ensuring every project can be built with the same common set of development tools and configurations, so we created the ToolKit project to provide a standard configuration for Amiga development. All *amigazen project* releases will be guaranteed to build against the ToolKit standard so that anyone can download and begin contributing straightaway without having to tailor the toolchain for their own setup.
+Key to the amigazen project approach is ensuring every project can be built with the same common set of development tools and configurations, so the ToolKit projectwas created to provide a standard configuration for Amiga development. All *amigazen project* releases will be guaranteed to build against the ToolKit standard so that anyone can download and begin contributing straightaway without having to tailor the toolchain for their own setup.
 
-Our philosophy is based on openness:
+The amigazen project philosophy is based on openness:
 
 *Open* to anyone and everyone	- *Open* source and free for all	- *Open* your mind and create!
 
-PRs for all of our projects are gratefully received at [GitHub](https://github.com/amigazen/). While our focus now is on classic 68k software, we do intend that all amigazen project releases can be ported to other Amiga-like systems including AROS and MorphOS where feasible.
+PRs for all amigazen projects are gratefully received at [GitHub](https://github.com/amigazen/). While the focus now is on classic 68k software, it is intended that all amigazen project releases can be ported to other Amiga-like systems including AROS and MorphOS where feasible.
 
 ## About ToolKit
 
