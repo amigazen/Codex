@@ -43,7 +43,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 
-static const char *codex_verstag = "$VER: Codex 47.4 (06/04/2026)";
+static const char *codex_verstag = "$VER: Codex 47.5 (06/04/2026)";
 static const char *stack_cookie = "$STACK: 8192";
 LONG oslibversion  = 47L; 
 
@@ -688,8 +688,23 @@ static void process_line(const char *line, int line_num, const char *filename) {
         }
         
         /* Now check for quote characters (escapes already handled above) */
-        if (*s == '"') in_string = !in_string;
-        if (*s == '\'') in_char_literal = !in_char_literal;
+        if (*s == '"') {
+            *p++ = *s++;
+            in_string = !in_string;
+            continue;
+        }
+        if (*s == '\'') {
+            *p++ = *s++;
+            in_char_literal = !in_char_literal;
+            continue;
+        }
+
+        /* Prevent false positives by masking string/char literal contents */
+        if (in_string || in_char_literal) {
+            *p++ = ' ';
+            s++;
+            continue;
+        }
 
         *p++ = *s++;
     }
@@ -1176,6 +1191,13 @@ static void check_c89_standards(const char *line, int line_num, const char *file
     char *for_pos;
     char *int_pos;
     char *type_pos;
+    const char *for_kw;
+    const char *p;
+    const char *init_start;
+    const char *init_end;
+    size_t init_len;
+    char init_buf[256];
+    char *init_token;
     
     /* Check for C++ comments - but skip if SAS/C mode is active (SAS/C supports them) */
     if (strstr(line, "//") && !validate_sasc_standards) {
@@ -1200,33 +1222,33 @@ static void check_c89_standards(const char *line, int line_num, const char *file
     }
     
     /* Check for variable declarations in for loop initializers */
-    if (strstr(line, "for") && strstr(line, "int")) {
-        for_pos = strstr(line, "for");
-        int_pos = strstr(line, "int");
-        if (int_pos > for_pos) {
-            add_error(filename, line_num, 1, ERROR_SYNTAX, 
-                     "Variable declaration in for loop not allowed in C89");
+    for_kw = strstr(line, "for");
+    while (for_kw) {
+        /* Require token boundary around "for" */
+        if ((for_kw == line || (!isalnum((unsigned char)for_kw[-1]) && for_kw[-1] != '_')) &&
+            (!isalnum((unsigned char)for_kw[3]) && for_kw[3] != '_')) {
+            p = for_kw + 3;
+            while (*p == ' ' || *p == '\t') p++;
+            if (*p == '(') {
+                init_start = p + 1;
+                init_end = strchr(init_start, ';');
+                if (!init_end) init_end = strchr(init_start, ')');
+                if (init_end && init_end > init_start) {
+                    init_len = (size_t)(init_end - init_start);
+                    if (init_len >= sizeof(init_buf)) init_len = sizeof(init_buf) - 1;
+                    strncpy(init_buf, init_start, init_len);
+                    init_buf[init_len] = '\0';
+
+                    init_token = strtok(init_buf, " \t\n\r*();,");
+                    if (init_token && is_declaration_keyword(init_token)) {
+                        add_error(filename, line_num, 1, ERROR_SYNTAX,
+                                 "Variable declaration in for loop not allowed in C89");
+                        break;
+                    }
+                }
+            }
         }
-    }
-    
-    /* Enhanced for loop detection for other types */
-    if (strstr(line, "for") && (strstr(line, "char ") || strstr(line, "long ") || 
-                                 strstr(line, "short ") || strstr(line, "float ") || 
-                                 strstr(line, "double ") || strstr(line, "unsigned "))) {
-        for_pos = strstr(line, "for");
-        type_pos = NULL;
-        
-        if (strstr(line, "char ")) type_pos = strstr(line, "char ");
-        else if (strstr(line, "long ")) type_pos = strstr(line, "long ");
-        else if (strstr(line, "short ")) type_pos = strstr(line, "short ");
-        else if (strstr(line, "float ")) type_pos = strstr(line, "float ");
-        else if (strstr(line, "double ")) type_pos = strstr(line, "double ");
-        else if (strstr(line, "unsigned ")) type_pos = strstr(line, "unsigned ");
-        
-        if (type_pos && type_pos > for_pos) {
-            add_error(filename, line_num, 1, ERROR_SYNTAX, 
-                     "Variable declaration in for loop not allowed in C89");
-        }
+        for_kw = strstr(for_kw + 3, "for");
     }
     
     /* Enhanced C99 feature detection for C89 compliance */
@@ -1268,51 +1290,51 @@ static void check_c99_standards(const char *line, int line_num, const char *file
     if (is_c99_keyword(line)) {
         /* This is fine in C99 mode - just note it for information */
         add_error_with_excerpt(filename, line_num, 1, ERROR_WARNING, 
-                 "C99 keyword detected - ensure your compiler supports C99", original_line);
+                 "C99 keyword detected (informational): valid in C99. Ensure your target compiler supports C99.", original_line);
     }
     
     /* Check for C99 features - these should be valid in C99 mode */
     if (is_c99_feature(line)) {
         /* This is fine in C99 mode - just note it for information */
         add_error_with_excerpt(filename, line_num, 1, ERROR_WARNING, 
-                 "C99 feature detected - ensure your compiler supports C99", original_line);
+                 "C99 feature detected (informational): valid in C99. Ensure your target compiler supports C99.", original_line);
     }
     
     /* Enhanced C99 feature detection - these should be valid in C99 mode */
     if (is_c99_designated_init(line)) {
         /* This is fine in C99 mode - just note it for information */
         add_error_with_excerpt(filename, line_num, 1, ERROR_WARNING, 
-                 "C99 designated initializer detected - ensure your compiler supports C99", original_line);
+                 "C99 designated initializer detected (informational): valid in C99. Ensure your target compiler supports C99.", original_line);
     }
     
     if (is_c99_compound_literal(line)) {
         /* This is fine in C99 mode - just note it for information */
         add_error_with_excerpt(filename, line_num, 1, ERROR_WARNING, 
-                 "C99 compound literal detected - ensure your compiler supports C99", original_line);
+                 "C99 compound literal detected (informational): valid in C99. Ensure your target compiler supports C99.", original_line);
     }
     
     if (is_c99_variadic_macro(line)) {
         /* This is fine in C99 mode - just note it for information */
         add_error_with_excerpt(filename, line_num, 1, ERROR_WARNING, 
-                 "C99 variadic macro detected - ensure your compiler supports C99", original_line);
+                 "C99 variadic macro detected (informational): valid in C99. Ensure your target compiler supports C99.", original_line);
     }
     
     if (is_c99_flexible_array(line)) {
         /* This is fine in C99 mode - just note it for information */
         add_error_with_excerpt(filename, line_num, 1, ERROR_WARNING, 
-                 "C99 flexible array member detected - ensure your compiler supports C99", original_line);
+                 "C99 flexible array member detected (informational): valid in C99. Ensure your target compiler supports C99.", original_line);
     }
     
     if (is_c99_stdlib_function(line)) {
         /* This is fine in C99 mode - just note it for information */
         add_error_with_excerpt(filename, line_num, 1, ERROR_WARNING, 
-                 "C99+ standard library function detected - ensure your compiler supports C99", original_line);
+                 "C99+ standard library function detected (informational): valid in C99. Ensure your target compiler supports C99.", original_line);
     }
     
     if (is_c99_header_file(line)) {
         /* This is fine in C99 mode - just note it for information */
         add_error_with_excerpt(filename, line_num, 1, ERROR_WARNING, 
-                 "C99+ header file detected - ensure your compiler supports C99", original_line);
+                 "C99+ header file detected (informational): valid in C99. Ensure your target compiler supports C99.", original_line);
     }
     
     /* Check for C89 header files when in C99 mode */
@@ -1417,9 +1439,15 @@ static int is_c99_feature(const char *line) {
     int num_features = sizeof(c99_features) / sizeof(c99_features[0]);
     
     for (i = 0; i < num_features; i++) {
-        if (strstr(line, c99_features[i])) {
-            return 1;
+        /* Avoid false positives: "..." is also used in C89 variadic functions. */
+        if (strcmp(c99_features[i], "...") == 0) {
+            if (strstr(line, "#define") && strstr(line, "...")) {
+                return 1;
+            }
+            continue;
         }
+
+        if (strstr(line, c99_features[i])) return 1;
     }
     return 0;
 }
@@ -1439,27 +1467,33 @@ static int is_c99_designated_init(const char *line) {
 
 /* Helper function to check if a line contains C99 compound literals */
 static int is_c99_compound_literal(const char *line) {
-    int i;
-    int num_patterns = sizeof(c99_compound_literal_patterns) / sizeof(c99_compound_literal_patterns[0]);
-    
-    for (i = 0; i < num_patterns; i++) {
-        if (strstr(line, c99_compound_literal_patterns[i])) {
-            return 1;
-        }
-    }
+    /* Reduce false positives: require a cast-like "(type){...}" shape. */
+    if (!strstr(line, "){") && !strstr(line, "){ ")) return 0;
+
+    if (strstr(line, "(int[]){")) return 1;
+    if (strstr(line, "(char[]){")) return 1;
+    if (strstr(line, "(long[]){")) return 1;
+    if (strstr(line, "(float[]){")) return 1;
+    if (strstr(line, "(double[]){")) return 1;
+    if (strstr(line, "(unsigned int[]){")) return 1;
+    if (strstr(line, "(unsigned char[]){")) return 1;
+    if (strstr(line, "(unsigned long[]){")) return 1;
+    if (strstr(line, "(struct ")) return 1;
+    if (strstr(line, "(union ")) return 1;
+    if (strstr(line, "(enum ")) return 1;
+
     return 0;
 }
 
 /* Helper function to check if a line contains C99 variadic macros */
 static int is_c99_variadic_macro(const char *line) {
-    int i;
-    int num_patterns = sizeof(c99_variadic_macro_patterns) / sizeof(c99_variadic_macro_patterns[0]);
-    
-    for (i = 0; i < num_patterns; i++) {
-        if (strstr(line, c99_variadic_macro_patterns[i])) {
-            return 1;
-        }
-    }
+    /* Variadic macros are a preprocessor feature: require #define context.
+       (Avoid matching C89 variadic function prototypes that also contain "...") */
+    if (!strstr(line, "#define")) return 0;
+    if (strstr(line, "__VA_ARGS__")) return 1;
+    if (strstr(line, "##__VA_ARGS__")) return 1;
+    if (strstr(line, "__VA_OPT__")) return 1;
+    if (strstr(line, "...")) return 1;
     return 0;
 }
 

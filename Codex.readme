@@ -1,8 +1,8 @@
-  Short:        Amiga native C code style checker for developers
+  Short:        C coding style checker for developers
   Uploader:     toolkit@amigazen.com
   Author:       amigazen project
   Type:         dev/c
-  Version:      47.4
+  Version:      47.5
   Architecture: m68k-amigaos >= 3.2
   Distribution: Aminet
   Kurz:         C-Code-Analyse-Tool fur Amiga-Entwicklung
@@ -23,7 +23,7 @@
   - Multi-file Support: Analyze entire projects with wildcard support
 
   Requirements:
-  - AmigaOS 3.1 or higher
+  - AmigaOS 3.2 or higher
   - Standard Amiga libraries (exec.library, dos.library, utility.library)
 
   Usage:
@@ -186,7 +186,7 @@
 
   This software is Free and Open Source Software distributed on BSD-2 license terms:
 
-  Copyright (c) 2025 amigazen project
+  Copyright (c) 2026 amigazen project
   All rights reserved.
 
   Redistribution and use in source and binary forms, with or without

@@ -128,13 +128,14 @@ Identifies potentially memory-unsafe functions from the standard C library, such
 @ENDNODE
 
 @NODE "all_tests" "All Tests Explained"
-@NEXT "output"
+@NEXT "checks_by_mode"
 @PREV "modes"
 @TITLE "Codex - All Tests Explained"
 
 @{B}All Tests Explained@{UB}
 
 @{"Back to Main" LINK "main"}
+@{"Complete Check List (by mode)" LINK "checks_by_mode"}
 
 This section details every specific check performed by Codex and which mode activates it.
 
@@ -170,9 +171,102 @@ This section details every specific check performed by Codex and which mode acti
 
 @ENDNODE
 
+@NODE "checks_by_mode" "Complete Check List (by mode)"
+@NEXT "output"
+@PREV "all_tests"
+@TITLE "Codex - Complete Check List (by mode)"
+
+@{B}Complete Check List (by mode)@{UB}
+
+@{"Back to All Tests" LINK "all_tests"}
+@{"Back to Main" LINK "main"}
+
+This table lists every concrete check Codex currently emits messages for, and which mode(s) enable it.
+
+@{CODE}
+CHECK (what Codex reports)                                      ENABLED BY
+---------------------------------------------------------------------------
+LINE LENGTH: Line exceeds maximum length (>256 chars)            Always active
+MAGIC NUMBER: Magic number found (suggest named constant)        Always active
+
+FORBID/PERMIT (line-level and file-level)
+  Forbid() usage detected                                        Always active
+  Forbid() without matching Permit() (previous Forbid)            Always active
+  Permit() without matching Forbid()                              Always active
+  Too many lines (>5) between Forbid() and Permit()               Always active
+  Forbid() used without matching Permit() (end of file)           Always active
+  Mismatched Forbid()/Permit() pairs: count mismatch (EOF)        Always active
+  File ends with active Forbid() without matching Permit()        Always active
+
+COMMENTS / PARSING
+  File ends with an unterminated /* comment (EOF)                 Always active
+  C++ comments (//) are not allowed in C89                        C89 (default), DICE, MEMSAFE
+                                                                    (SASC implies C89 but permits //)
+
+C89 STANDARD CHECKS
+  'inline' keyword is not available in C89                        C89 (default), SASC, DICE, MEMSAFE
+  _Bool type is not available in C89                              C89 (default), SASC, DICE, MEMSAFE
+  'restrict' keyword is not available in C89                      C89 (default), SASC, DICE, MEMSAFE
+  Variable declaration in for loop not allowed in C89             C89 (default), SASC, DICE, MEMSAFE
+  C99 designated initializer not available in C89                 C89 (default), SASC, DICE, MEMSAFE
+  C99 compound literal not available in C89                       C89 (default), SASC, DICE, MEMSAFE
+  C99 variadic macro not available in C89                         C89 (default), SASC, DICE, MEMSAFE
+  C99 flexible array member not available in C89                  C89 (default), SASC, DICE, MEMSAFE
+  C99+ standard library function not available in C89             C89 (default), SASC, DICE, MEMSAFE
+  C99+ header file not available in C89                           C89 (default), SASC, DICE, MEMSAFE
+  Variable declaration after a statement (within a block)          C89 (default), SASC, DICE, MEMSAFE
+
+C99 STANDARD CHECKS (informational warnings)
+  C99 keyword detected - ensure compiler supports C99             C99, VBCC
+  C99 feature detected - ensure compiler supports C99             C99, VBCC
+  C99 designated initializer detected - ensure compiler supports  C99, VBCC
+  C99 compound literal detected - ensure compiler supports C99    C99, VBCC
+  C99 variadic macro detected - ensure compiler supports C99      C99, VBCC
+  C99 flexible array member detected - ensure compiler supports   C99, VBCC
+  C99+ standard library function detected - ensure supports C99   C99, VBCC
+  C99+ header file detected - ensure compiler supports C99        C99, VBCC
+
+AMIGA STANDARDS
+  Use Amiga types (UBYTE* or STRPTR) instead of char*             AMIGA
+  Use Amiga types (LONG) instead of long                          AMIGA
+  Use Amiga types (ULONG) instead of int                          AMIGA
+  Use Amiga types (WORD) instead of short                         AMIGA
+  Use Amiga primitive types instead of unsigned long/int/short    AMIGA
+  USHORT is deprecated - use UWORD instead                        AMIGA
+  SHORT is deprecated - use WORD instead                          AMIGA
+  COUNT is deprecated - use WORD instead                          AMIGA
+  UCOUNT is deprecated - use UWORD instead                        AMIGA
+  CPTR is deprecated - use ULONG instead                          AMIGA
+  LONGBITS/WORDBITS/BYTEBITS/RPTR caution messages                AMIGA
+  Use Amiga types (FLOAT/DOUBLE/BOOL) instead of float/double/bool AMIGA
+  Consider using APTR instead of void*                             AMIGA
+  Use CONST_STRPTR instead of const char*                          AMIGA
+  Use STRPTR instead of unsigned char* for strings                 AMIGA
+  Use PascalCase function names                                   AMIGA
+  Assigning 0 to a pointer: use NULL                               AMIGA
+
+NDK / UNIVERSAL SYNTAX
+  NDK reserved word found - use universal syntax instead          NDK (also implied by AMIGA and DICE)
+
+COMPILER COMPATIBILITY (flags incompatible keyword, suggests universal replacement)
+  Keyword 'X' incompatible with SAS/C ...                         SASC
+  Keyword 'X' incompatible with VBCC ...                          VBCC
+  Keyword 'X' DICE-incompatible ...                               DICE
+
+MEMORY SAFETY
+  Memory-unsafe function 'X' found - consider using 'Y' instead   MEMSAFE
+  Unsafe use of 'realpath' suspected...                            MEMSAFE
+  Unsafe use of 'scanf'/'sscanf' suspected...                      MEMSAFE
+
+TEST HARNESS OUTPUT
+  $CODEX: comments are emitted as COMMENT entries (when used)      Always active
+@{PLAIN}
+
+@ENDNODE
+
 @NODE "output" "Understanding the Output"
 @NEXT "troubleshooting"
-@PREV "all_tests"
+@PREV "checks_by_mode"
 @TITLE "Codex - Understanding the Output"
 
 @{B}Understanding the Output@{UB}
