@@ -30,6 +30,7 @@
 ; NOTE: $CODEX: comments in test files will appear as warning messages
 ; in the output, making it easier to verify expected behavior
 
+FailAt 21
 echo "=== Codex Test Suite ==="
 echo "Testing all validation modes and functionality"
 echo ""
@@ -40,7 +41,7 @@ echo ""
 ; Test 1: Basic usage and help
 echo "Test 1: Basic usage and help"
 echo "================================"
-/Codex
+/Codex HELP
 echo ""
 
 ; Test 2: C89 validation only

@@ -106,6 +106,12 @@ smake install ;Will copy Codex to the SDK/C drawer in the project directory
 
 ## ChangeLog
 
+### Version 47.5 (06.04.2026)
+
+- Fixed: Avoid false hits in strings/char literals, treat "..." as variadic macros only in #define context, and improve C89 for-loop declaration detection by parsing the for(...) initializer. Reword C99-mode warnings to be explicitly informational (“valid in C99”).
+
+Update version strings/docs/help to 47.4 and add a complete “checks by mode” table to Codex.guide.
+
 ### Version 47.4 (06.04.2026)
 
 - Fixed: `C99` mode no longer enforces `C89` checks by default
