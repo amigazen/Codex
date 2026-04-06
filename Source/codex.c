@@ -43,7 +43,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 
-static const char *codex_verstag = "$VER: Codex 47.3 (26/12/2025)";
+static const char *codex_verstag = "$VER: Codex 47.4 (06/04/2026)";
 static const char *stack_cookie = "$STACK: 8192";
 LONG oslibversion  = 47L; 
 
@@ -432,6 +432,16 @@ int main(int argc, char **argv) {
     if (args.vbcc_standards) validate_vbcc_standards = 1;
     if (args.dice_standards) validate_dice_standards = 1;
     if (args.memsafe_standards) validate_memsafe_standards = 1;
+
+    /* If the user explicitly asked for C99, disable the default C89 checks unless
+       the user also explicitly requested C89 or selected a mode that implies C89. */
+    if (args.c99_standards &&
+        !args.c89_standards &&
+        !args.sasc_standards &&
+        !args.dice_standards &&
+        !args.memsafe_standards) {
+        validate_c89_standards = 0;
+    }
 
     /* Implement mode dependencies with warnings for conflicts */
     if (validate_sasc_standards) {

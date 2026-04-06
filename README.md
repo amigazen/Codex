@@ -106,6 +106,10 @@ smake install ;Will copy Codex to the SDK/C drawer in the project directory
 
 ## ChangeLog
 
+### Version 47.4 (06.04.2026)
+
+- Fixed: `C99` mode no longer enforces `C89` checks by default
+
 ### Version 47.3 (21.08.2025)
 
 - Fixed: Replaced placeholder stdlib functions with SAS/C sc.lib built-ins

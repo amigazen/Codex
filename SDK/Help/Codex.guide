@@ -1,5 +1,5 @@
 @DATABASE Codex.guide
-@$VER: "Codex.guide 47.3 (21.08.2025)"
+@$VER: "Codex.guide 47.4 (06.04.2026)"
 @AUTHOR "amigazen project"
 
 @NODE "main" "Codex - Amiga C Linter & Style Checker"
